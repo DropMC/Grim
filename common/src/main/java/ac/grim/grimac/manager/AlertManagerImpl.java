@@ -20,6 +20,7 @@ import org.jetbrains.annotations.Nullable;
 import java.util.HashSet;
 import java.util.Objects;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArraySet;
 
 /**
@@ -60,9 +61,21 @@ public final class AlertManagerImpl implements AlertManager, ConfigReloadable, S
          * @return listeners this message was sent to, null means console
          */
         public Set<@Nullable PlatformPlayer> send(Component component, @Nullable Set<@Nullable PlatformPlayer> excluding) {
+            return send(component, excluding, null);
+        }
+
+        /**
+         * @param flagged the player the message is about; when set, {@link AlertRecipientFilter}
+         *                decides which listeners receive it
+         */
+        public Set<@Nullable PlatformPlayer> send(Component component, @Nullable Set<@Nullable PlatformPlayer> excluding,
+                                                  @Nullable UUID flagged) {
             HashSet<PlatformPlayer> listeners = new HashSet<>(players);
             if (excluding != null) {
                 listeners.removeAll(excluding);
+            }
+            if (flagged != null) {
+                listeners.removeIf(listener -> !AlertRecipientFilter.receives(listener.getUniqueId(), flagged));
             }
 
             for (PlatformPlayer platformPlayer : listeners) {
@@ -394,6 +407,15 @@ public final class AlertManagerImpl implements AlertManager, ConfigReloadable, S
      */
     public Set<PlatformPlayer> sendAlert(Component component, @Nullable Set<@Nullable PlatformPlayer> excluding) {
         return AlertType.NORMAL.send(component, excluding);
+    }
+
+    /**
+     * {@link #sendAlert(Component, Set)} for an alert about {@code flagged}, which the fork's
+     * {@link AlertRecipientFilter} can narrow per staff member.
+     */
+    public Set<PlatformPlayer> sendAlert(Component component, @Nullable Set<@Nullable PlatformPlayer> excluding,
+                                         @NotNull UUID flagged) {
+        return AlertType.NORMAL.send(component, excluding, flagged);
     }
 
     @Contract(pure = true)

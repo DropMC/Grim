@@ -215,7 +215,7 @@ public class PunishmentManager implements ConfigReloadable {
                                             player.sendMessage(message);
                                         }
                                     } else {
-                                        GrimAPI.INSTANCE.getAlertManager().sendAlert(message, verboseListeners);
+                                        GrimAPI.INSTANCE.getAlertManager().sendAlert(message, verboseListeners, player.uuid);
                                     }
                                 }
                                 default -> GrimAPI.INSTANCE.getScheduler().getGlobalRegionScheduler().run(GrimAPI.INSTANCE.getGrimPlugin(), () ->
