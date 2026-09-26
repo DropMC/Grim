@@ -3,6 +3,7 @@ package ac.grim.grimac.utils.anticheat;
 import ac.grim.grimac.GrimAPI;
 import ac.grim.grimac.api.event.events.GrimJoinEvent;
 import ac.grim.grimac.api.event.events.GrimQuitEvent;
+import ac.grim.grimac.manager.AlertFilter;
 import ac.grim.grimac.player.GrimPlayer;
 import ac.grim.grimac.platform.api.player.PlatformPlayer;
 import ac.grim.grimac.platform.api.player.PlatformPlayerCache;
@@ -122,6 +123,7 @@ public class PlayerDataManager {
                 .onQuitFromUserDisconnect(user, grimPlayer, System.currentTimeMillis());
         if (uuid != null) {
             GrimAPI.INSTANCE.getDataStoreLifecycle().playerToggleStore().evict(uuid);
+            AlertFilter.evict(uuid);
         }
 
         // Check if calling async is safe

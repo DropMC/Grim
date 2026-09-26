@@ -179,7 +179,7 @@ public class PunishmentManager implements ConfigReloadable {
                         sentDebug = true;
                         String verboseForListeners = safeGet(verbose);
                         String listenerCmd = replaceAlertPlaceholders(command.command, vl, check, verboseForListeners);
-                        verboseListeners = GrimAPI.INSTANCE.getAlertManager().sendVerbose(MessageUtil.miniMessage(listenerCmd), null);
+                        verboseListeners = GrimAPI.INSTANCE.getAlertManager().sendVerbose(MessageUtil.miniMessage(listenerCmd), null, player.uuid);
                     }
                     if (violationCount >= command.threshold) {
                         boolean shouldRun = command.interval == 0

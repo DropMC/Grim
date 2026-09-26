@@ -1,6 +1,7 @@
 package ac.grim.grimac.events.packets;
 
 import ac.grim.grimac.GrimAPI;
+import ac.grim.grimac.manager.AlertFilter;
 import ac.grim.grimac.manager.datastore.PlayerToggleStore;
 import ac.grim.grimac.platform.api.player.PlatformPlayer;
 import ac.grim.grimac.utils.anticheat.LogUtil;
@@ -70,6 +71,10 @@ public class PacketPlayerJoinQuit extends PacketListenerAbstract {
                 "grim.brand", "grim.brand.enable-on-join", "grim.brand.enable-on-join.silent",
                 (p, silent) -> GrimAPI.INSTANCE.getAlertManager().toggleBrands(p, silent),
                 (p, value) -> GrimAPI.INSTANCE.getAlertManager().setBrandsEnabled(p, value, true));
+
+        if (platformPlayer.hasPermission("grim.alerts") || platformPlayer.hasPermission("grim.verbose")) {
+            AlertFilter.load(platformPlayer.getUniqueId());
+        }
 
         if (platformPlayer.hasPermission("grim.spectate") && GrimAPI.INSTANCE.getConfigManager().getConfig().getBooleanElse("spectators.hide-regardless", false)) {
             GrimAPI.INSTANCE.getSpectateManager().onLogin(platformPlayer.getUniqueId());

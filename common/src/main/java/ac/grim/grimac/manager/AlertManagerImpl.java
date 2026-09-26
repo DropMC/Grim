@@ -65,8 +65,8 @@ public final class AlertManagerImpl implements AlertManager, ConfigReloadable, S
         }
 
         /**
-         * @param flagged the player the message is about; when set, {@link AlertRecipientFilter}
-         *                decides which listeners receive it
+         * @param flagged the player the message is about; when set, {@link AlertFilter} decides
+         *                which listeners receive it
          */
         public Set<@Nullable PlatformPlayer> send(Component component, @Nullable Set<@Nullable PlatformPlayer> excluding,
                                                   @Nullable UUID flagged) {
@@ -75,7 +75,7 @@ public final class AlertManagerImpl implements AlertManager, ConfigReloadable, S
                 listeners.removeAll(excluding);
             }
             if (flagged != null) {
-                listeners.removeIf(listener -> !AlertRecipientFilter.receives(listener.getUniqueId(), flagged));
+                listeners.removeIf(listener -> !AlertFilter.receives(listener.getUniqueId(), flagged));
             }
 
             for (PlatformPlayer platformPlayer : listeners) {
@@ -401,6 +401,15 @@ public final class AlertManagerImpl implements AlertManager, ConfigReloadable, S
     }
 
     /**
+     * {@link #sendVerbose(Component, Set)} for a flag of {@code flagged}, which the fork's
+     * {@link AlertFilter} can narrow per staff member.
+     */
+    public Set<PlatformPlayer> sendVerbose(Component component, @Nullable Set<@Nullable PlatformPlayer> excluding,
+                                           @NotNull UUID flagged) {
+        return AlertType.VERBOSE.send(component, excluding, flagged);
+    }
+
+    /**
      * @param component the message to send to listeners
      * @param excluding the listeners to exclude, null means console
      * @return listeners this message was sent to, null means console
@@ -411,7 +420,7 @@ public final class AlertManagerImpl implements AlertManager, ConfigReloadable, S
 
     /**
      * {@link #sendAlert(Component, Set)} for an alert about {@code flagged}, which the fork's
-     * {@link AlertRecipientFilter} can narrow per staff member.
+     * {@link AlertFilter} can narrow per staff member.
      */
     public Set<PlatformPlayer> sendAlert(Component component, @Nullable Set<@Nullable PlatformPlayer> excluding,
                                          @NotNull UUID flagged) {
