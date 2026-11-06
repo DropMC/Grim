@@ -87,6 +87,7 @@ public class UncertaintyHandler {
     public final LastInstance lastTeleportTicks;
     public final LastInstance lastPointThree;
     public final LastInstance stuckOnEdge;
+    public final LastInstance lastSneakingByLedge;
     public final LastInstance lastStuckNorth;
     public final LastInstance lastStuckSouth;
     public final LastInstance lastStuckWest;
@@ -106,6 +107,7 @@ public class UncertaintyHandler {
         this.lastTeleportTicks = new LastInstance(player);
         this.lastPointThree = new LastInstance(player);
         this.stuckOnEdge = new LastInstance(player);
+        this.lastSneakingByLedge = new LastInstance(player);
         this.lastStuckNorth = new LastInstance(player);
         this.lastStuckSouth = new LastInstance(player);
         this.lastStuckWest = new LastInstance(player);
@@ -307,8 +309,12 @@ public class UncertaintyHandler {
         }
         // Vanilla 1.21 clients glitch when sneaking along slab, stair and block edges (MC-275082): they stall or
         // carry velocity the edge back-off math does not produce, in ways too precision-dependent to simulate.
-        // Sneaking movement tops out around 0.065 blocks per tick, so this stays below walking speed.
+        // The extra velocity comes out when the player lets go of sneak and drops off the edge, so the lenience
+        // lasts half a second past the last tick spent sneaking by the ledge, enough to cover the fall and landing.
         if (!player.inVehicle() && !player.isFlying && player.isSneaking && player.lastOnGround && Collisions.isNearLedge(player)) {
+            lastSneakingByLedge.reset();
+        }
+        if (!player.inVehicle() && !player.isFlying && lastSneakingByLedge.hasOccurredSince(10)) {
             offset -= 0.08;
         }
         // This is the end of that section.
