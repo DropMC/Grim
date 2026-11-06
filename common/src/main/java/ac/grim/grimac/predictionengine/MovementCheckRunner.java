@@ -142,6 +142,29 @@ public class MovementCheckRunner extends GrimProcessor {
         player.uncertaintyHandler.lastVerticalOffset = 0;
     }
 
+    // A sneaking 1.21 client stops at slab, stair and block edges where Grim's edge probes see no stop
+    // (MC-275082), and Swift Sneak makes the missed movement large. The edge stop only ever shortens an axis
+    // toward zero, leaving at most 0.05, so when that is what the client reports next to a ledge, measure the
+    // offset as if the predicted axis had been stopped too. Moving less is never an advantage, and the
+    // velocity the client keeps on that axis is the one Grim already predicts.
+    private double edgeStoppedOffset() {
+        Vector3dm predicted = player.predictedVelocity.vector;
+        Vector3dm actual = player.actualMovement;
+        if (player.inVehicle() || player.isFlying || !player.isSneaking || !player.lastOnGround) return Double.MAX_VALUE;
+
+        boolean stoppedX = isEdgeStopped(predicted.getX(), actual.getX());
+        boolean stoppedZ = isEdgeStopped(predicted.getZ(), actual.getZ());
+        if ((!stoppedX && !stoppedZ) || !Collisions.isNearLedge(player)) return Double.MAX_VALUE;
+
+        Vector3dm stopped = new Vector3dm(stoppedX ? actual.getX() : predicted.getX(), predicted.getY(), stoppedZ ? actual.getZ() : predicted.getZ());
+        return stopped.distance(actual);
+    }
+
+    private static boolean isEdgeStopped(double predicted, double actual) {
+        boolean towardZero = actual == 0 || Math.signum(actual) == Math.signum(predicted);
+        return towardZero && Math.abs(actual) <= 0.05 && Math.abs(actual) < Math.abs(predicted);
+    }
+
     private void check(PositionUpdate update) {
         if (update.isTeleport()) {
             handleTeleport(update);
@@ -574,6 +597,7 @@ public class MovementCheckRunner extends GrimProcessor {
 
         // No, don't comment about the sqrt call.  It doesn't matter unless you run sqrt thousands of times a second.
         double offset = player.predictedVelocity.vector.distance(player.actualMovement);
+        offset = Math.min(offset, edgeStoppedOffset());
         offset = player.uncertaintyHandler.reduceOffset(offset);
 
         if (player.packetStateData.tryingToRiptide != clientClaimsRiptide) {
