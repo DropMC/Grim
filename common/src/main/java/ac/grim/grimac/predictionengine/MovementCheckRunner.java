@@ -142,6 +142,31 @@ public class MovementCheckRunner extends GrimProcessor {
         player.uncertaintyHandler.lastVerticalOffset = 0;
     }
 
+    // Vanilla clients get stuck sneaking at slab and stair edges even where the edge back-off math says they
+    // can step down (MC-275082, a precision bug in the client). The client then reports exactly zero on the
+    // stalled axis while it still carries velocity there, which the probes above cannot predict. Treat that
+    // as an edge stop: moving less is never an advantage, and the hidden velocity it unlocks stays bounded
+    // by SneakingEstimator.
+    private void markStalledSneakAxes() {
+        if (player.isFlying || !player.isSneaking || !player.lastOnGround || player.inVehicle()) return;
+
+        boolean stalledX = player.actualMovement.getX() == 0 && Math.abs(player.clientVelocity.getX()) > 0.003;
+        boolean stalledZ = player.actualMovement.getZ() == 0 && Math.abs(player.clientVelocity.getZ()) > 0.003;
+        if (!stalledX && !stalledZ) return;
+
+        if (stalledX) {
+            if (player.clientVelocity.getX() > 0) player.uncertaintyHandler.lastStuckEast.reset();
+            else player.uncertaintyHandler.lastStuckWest.reset();
+        }
+
+        if (stalledZ) {
+            if (player.clientVelocity.getZ() > 0) player.uncertaintyHandler.lastStuckSouth.reset();
+            else player.uncertaintyHandler.lastStuckNorth.reset();
+        }
+
+        player.uncertaintyHandler.stuckOnEdge.reset();
+    }
+
     private void check(PositionUpdate update) {
         if (update.isTeleport()) {
             handleTeleport(update);
@@ -325,6 +350,7 @@ public class MovementCheckRunner extends GrimProcessor {
 
         // This isn't the final velocity of the player in the tick, only the one applied to the player
         player.actualMovement = new Vector3dm(player.x - player.lastX, player.y - player.lastY, player.z - player.lastZ);
+        markStalledSneakAxes();
 
         if (player.isSprinting != player.lastSprinting) {
             player.compensatedEntities.hasSprintingAttributeEnabled = player.isSprinting;
