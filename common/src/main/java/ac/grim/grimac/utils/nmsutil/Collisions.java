@@ -383,6 +383,10 @@ public final class Collisions {
     }
 
     public static Vector3dm maybeBackOffFromEdge(Vector3dm vec3, GrimPlayer player, boolean overrideVersion) {
+        if (player.getClientVersion().isNewerThanOrEquals(ClientVersion.V_1_21_2)) {
+            return maybeBackOffFromEdgeModern(vec3, player);
+        }
+
         if (!player.isFlying && player.isSneaking && isAboveGround(player)) {
             double x = vec3.getX();
             double z = vec3.getZ();
@@ -430,7 +434,68 @@ public final class Collisions {
         return vec3;
     }
 
+    // 1.21.2 rewrote the edge back-off: instead of moving the whole bounding box down by the step height,
+    // it probes only a thin slab under the player's feet (Player#canFallAtLeast). Probing the whole box
+    // also hits blocks beside the player's body, such as the next stair or slab, so the old check
+    // concluded the player could not fall, missed the edge stop and falsed Simulation when sneaking
+    // down stairs and slabs.
+    private static Vector3dm maybeBackOffFromEdgeModern(Vector3dm vec3, GrimPlayer player) {
+        double stepHeight = player.getMaxUpStep();
+        if (player.isFlying || vec3.getY() > 0.0 || !player.isSneaking || !isAboveGround(player)) {
+            return vec3;
+        }
+
+        double x = vec3.getX();
+        double z = vec3.getZ();
+        double stepX = Math.signum(x) * 0.05;
+        double stepZ = Math.signum(z) * 0.05;
+
+        while (x != 0.0 && canFallAtLeast(player, x, 0.0, stepHeight)) {
+            if (Math.abs(x) <= 0.05) {
+                x = 0.0;
+                break;
+            }
+            x -= stepX;
+        }
+
+        while (z != 0.0 && canFallAtLeast(player, 0.0, z, stepHeight)) {
+            if (Math.abs(z) <= 0.05) {
+                z = 0.0;
+                break;
+            }
+            z -= stepZ;
+        }
+
+        while (x != 0.0 && z != 0.0 && canFallAtLeast(player, x, z, stepHeight)) {
+            if (Math.abs(x) <= 0.05) {
+                x = 0.0;
+            } else {
+                x -= stepX;
+            }
+
+            if (Math.abs(z) <= 0.05) {
+                z = 0.0;
+            } else {
+                z -= stepZ;
+            }
+        }
+
+        return new Vector3dm(x, vec3.getY(), z);
+    }
+
+    private static boolean canFallAtLeast(GrimPlayer player, double x, double z, double distance) {
+        SimpleCollisionBox box = player.boundingBox;
+        return isEmpty(player, new SimpleCollisionBox(
+                box.minX + 1.0E-7 + x, box.minY - distance - 1.0E-7, box.minZ + 1.0E-7 + z,
+                box.maxX - 1.0E-7 + x, box.minY, box.maxZ - 1.0E-7 + z));
+    }
+
     public static boolean isAboveGround(GrimPlayer player) {
+        if (player.getClientVersion().isNewerThanOrEquals(ClientVersion.V_1_21_2)) {
+            double stepHeight = player.getMaxUpStep();
+            return player.lastOnGround || (player.fallDistance < stepHeight && !canFallAtLeast(player, 0.0, 0.0, stepHeight - player.fallDistance));
+        }
+
         // https://bugs.mojang.com/browse/MC-2404
         return player.lastOnGround || (player.getClientVersion().isNewerThanOrEquals(ClientVersion.V_1_16_2) && (player.fallDistance < player.getMaxUpStep() &&
                 !isEmpty(player, player.boundingBox.copy().offset(0.0, player.fallDistance - player.getMaxUpStep(), 0.0))));
