@@ -483,6 +483,21 @@ public final class Collisions {
         return new Vector3dm(x, vec3.getY(), z);
     }
 
+    // Whether a drop of at least LEDGE_DEPTH (a slab, a stair step or a real edge) sits within LEDGE_REACH
+    // of the player's feet in any horizontal direction.
+    public static boolean isNearLedge(GrimPlayer player) {
+        for (double[] direction : LEDGE_DIRECTIONS) {
+            if (canFallAtLeast(player, direction[0] * LEDGE_REACH, direction[1] * LEDGE_REACH, LEDGE_DEPTH)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static final double LEDGE_REACH = 0.3;
+    private static final double LEDGE_DEPTH = 0.25;
+    private static final double[][] LEDGE_DIRECTIONS = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
+
     private static boolean canFallAtLeast(GrimPlayer player, double x, double z, double distance) {
         SimpleCollisionBox box = player.boundingBox;
         return isEmpty(player, new SimpleCollisionBox(

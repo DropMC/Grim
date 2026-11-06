@@ -10,6 +10,7 @@ import ac.grim.grimac.utils.data.packetentity.PacketEntityStrider;
 import ac.grim.grimac.utils.lists.EvictingQueue;
 import ac.grim.grimac.utils.math.Vector3dm;
 import ac.grim.grimac.utils.nmsutil.BoundingBoxSize;
+import ac.grim.grimac.utils.nmsutil.Collisions;
 import ac.grim.grimac.utils.nmsutil.ReachUtils;
 import ac.grim.grimac.utils.nmsutil.StuckSpeed;
 import com.github.retrooper.packetevents.protocol.attribute.Attributes;
@@ -303,6 +304,12 @@ public class UncertaintyHandler {
         // This is a section where I hack around current issues with Grim itself...
         if (player.uncertaintyHandler.influencedByBouncyBlock() && (!player.isPointThree() || player.inVehicle())) {
             offset -= 0.03;
+        }
+        // Vanilla 1.21 clients glitch when sneaking along slab, stair and block edges (MC-275082): they stall or
+        // carry velocity the edge back-off math does not produce, in ways too precision-dependent to simulate.
+        // Sneaking movement tops out around 0.065 blocks per tick, so this stays below walking speed.
+        if (!player.inVehicle() && !player.isFlying && player.isSneaking && player.lastOnGround && Collisions.isNearLedge(player)) {
+            offset -= 0.08;
         }
         // This is the end of that section.
 
