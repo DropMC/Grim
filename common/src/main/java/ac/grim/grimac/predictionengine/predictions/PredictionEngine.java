@@ -580,7 +580,8 @@ public class PredictionEngine {
         }
 
         // Hidden slime block bounces by missing idle tick and 0.03
-        if (player.uncertaintyHandler.influencedByBouncyBlock()) {
+        // Not for ridden mobs, they move every tick so the bounce is never hidden
+        if (player.uncertaintyHandler.influencedByBouncyBlock() && !(player.inVehicle() && player.compensatedEntities.self.getRiding().isLivingEntity)) {
             if (player.uncertaintyHandler.thisTickSlimeBlockUncertainty != 0 && !vector.isJump()) { // jumping overrides slime block
                 if (player.uncertaintyHandler.thisTickSlimeBlockUncertainty > maxVector.getY()) {
                     maxVector.setY(player.uncertaintyHandler.thisTickSlimeBlockUncertainty);
@@ -735,7 +736,7 @@ public class PredictionEngine {
         int strafeMax = 1;
 
         // Calculate inputs by the players known inputs on 1.21.2+
-        if (player.supportsEndTick()) {
+        if (player.supportsEndTickPreVia()) {
             forwardMin = forwardMax = strafeMin = strafeMax = 0;
 
             final KnownInput knownInput = player.packetStateData.knownInput;
