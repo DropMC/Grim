@@ -28,6 +28,7 @@ import com.github.retrooper.packetevents.wrapper.play.client.WrapperPlayClientCr
 import com.github.retrooper.packetevents.wrapper.play.client.WrapperPlayClientHeldItemChange;
 import com.github.retrooper.packetevents.wrapper.play.client.WrapperPlayClientPlayerDigging;
 import com.github.retrooper.packetevents.wrapper.play.client.WrapperPlayClientUseItem;
+import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerHeldItemChange;
 import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerOpenHorseWindow;
 import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerOpenWindow;
 import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerSetPlayerInventory;
@@ -315,6 +316,21 @@ public class CompensatedInventory extends GrimProcessor implements PacketReceive
         // Not 1:1 MCP, based on Wiki.VG to be simpler as we need less logic...
         // For example, we don't need permanent storage, only storing data until the client closes the window
         // We also don't need a lot of server-sided only logic
+        if (event.getPacketType() == PacketType.Play.Server.HELD_ITEM_CHANGE) {
+            // The server moves the selection on join (the saved slot) and whenever a plugin calls
+            // setHeldItemSlot. The client switches without echoing a HELD_ITEM_CHANGE back, so
+            // without this the held item stays on the old slot: FastBreak then predicts the
+            // barehanded break time for a player mining with a pickaxe and cancels the break.
+            final int slot = new WrapperPlayServerHeldItemChange(event).getSlot();
+            if (slot < 0 || slot > 8) return;
+
+            player.sendTransaction();
+            player.latencyUtils.addRealTimeTask(player.lastTransactionSent.get(), () -> {
+                inventory.setSelected(slot);
+                player.packetStateData.lastSlotSelected = slot;
+            });
+        }
+
         if (event.getPacketType() == PacketType.Play.Server.OPEN_WINDOW) {
             WrapperPlayServerOpenWindow open = new WrapperPlayServerOpenWindow(event);
 
