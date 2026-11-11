@@ -6,7 +6,7 @@ import ac.grim.grimac.checks.Check;
 import ac.grim.grimac.checks.CheckData;
 import ac.grim.grimac.checks.impl.verbose.VerboseCodecs;
 import ac.grim.grimac.checks.type.BlockBreakListener;
-import ac.grim.grimac.checks.type.PreViaPacketReceiveListener;
+import ac.grim.grimac.checks.type.PacketReceiveListener;
 import ac.grim.grimac.player.GrimPlayer;
 import ac.grim.grimac.utils.anticheat.update.BlockBreak;
 import ac.grim.grimac.utils.math.GrimMath;
@@ -14,6 +14,7 @@ import ac.grim.grimac.utils.nmsutil.BlockBreakSpeed;
 import ac.grim.grimac.utils.viaversion.ViaVersionUtil;
 import com.github.retrooper.packetevents.PacketEvents;
 import com.github.retrooper.packetevents.event.PacketReceiveEvent;
+import com.github.retrooper.packetevents.protocol.packettype.PacketType;
 import com.github.retrooper.packetevents.protocol.player.ClientVersion;
 import com.github.retrooper.packetevents.protocol.player.DiggingAction;
 import com.github.retrooper.packetevents.protocol.world.states.WrappedBlockState;
@@ -29,7 +30,7 @@ import java.util.Set;
 // Also based loosely off of NoCheatPlus FastBreak
 // Also based off minecraft wiki: https://minecraft.wiki/w/Breaking#Instant_breaking
 @CheckData(name = "FastBreak", stableKey = "grim.breaking.fast_break", description = "Breaking blocks too quickly")
-public class FastBreak extends Check implements BlockBreakListener, PreViaPacketReceiveListener {
+public class FastBreak extends Check implements BlockBreakListener, PacketReceiveListener {
     private static final Verbose V =
             Verbose.of("[delay={ulong}ms|diff={f64:%.1f}ms, balance={f64:%.1f}ms], type={block}");
 
@@ -51,6 +52,8 @@ public class FastBreak extends Check implements BlockBreakListener, PreViaPacket
     long lastFinishBreak = 0;
     // The time the player started to break the block, to know how long the player waited until they finished breaking the block
     long startBreak = 0;
+    // Client ticks (CLIENT_TICK_END packets) since the START of the current block, on 1.21.2+ clients
+    int ticksSinceStart = 0;
 
     // The buffer to this check
     double blockBreakBalance = 0;
@@ -77,6 +80,7 @@ public class FastBreak extends Check implements BlockBreakListener, PreViaPacket
             WrappedBlockState block = clientOlderThanServer ? WrappedBlockState.getByGlobalId(player.getClientVersion(), player.getViaTranslatedClientBlockID(blockBreak.block.getGlobalId())) : blockBreak.block;
 
             startBreak = System.currentTimeMillis() - (targetBlockPosition == null ? 50 : 0); // ???
+            ticksSinceStart = 0;
             targetBlockPosition = blockBreak.position;
 
             // FIXME: getBlockDamage might not return the correct value if the player switched slots before this
@@ -101,9 +105,7 @@ public class FastBreak extends Check implements BlockBreakListener, PreViaPacket
         }
 
         if (blockBreak.action == DiggingAction.FINISHED_DIGGING && targetBlockPosition != null) {
-            double predictedTime = Math.ceil(1 / maximumBlockDamage) * 50;
-            double realTime = System.currentTimeMillis() - startBreak;
-            double diff = predictedTime - realTime;
+            double diff = player.supportsEndTick() ? tickShortfall() : wallClockShortfall();
 
             clampBalance();
 
@@ -126,7 +128,12 @@ public class FastBreak extends Check implements BlockBreakListener, PreViaPacket
     }
 
     @Override
-    public void onPreViaPacketReceive(PacketReceiveEvent event) {
+    public void onPacketReceive(PacketReceiveEvent event) {
+        if (event.getPacketType() == PacketType.Play.Client.CLIENT_TICK_END && player.supportsEndTick()
+                && targetBlockPosition != null) {
+            ticksSinceStart++;
+        }
+
         // Find the most optimal block damage using the animation packet, which is sent at least once a tick when breaking blocks
         // On 1.8 clients, via screws with this packet meaning we must fall back to the 1.8 idle flying packet
         //
@@ -135,6 +142,26 @@ public class FastBreak extends Check implements BlockBreakListener, PreViaPacket
         if ((flying || player.getClientVersion().isNewerThanOrEquals(ClientVersion.V_1_9) && isAnimation(event.getPacketType())) && targetBlockPosition != null) {
             maximumBlockDamage = Math.max(maximumBlockDamage, BlockBreakSpeed.getBlockDamage(player, player.compensatedWorld.getBlock(targetBlockPosition)));
         }
+    }
+
+    /**
+     * How early the block finished, in milliseconds, counted in client ticks. The vanilla client deals
+     * damage in the START tick already and sends FINISH in the tick the damage reaches 1, so a block
+     * that takes n ticks has exactly n - 1 tick ends between the two packets. Server receive times
+     * carry the network jitter instead: a few ms early on every block of a long mining session added
+     * up to a rollback for legit players, since late finishes never paid the balance back.
+     * One extra tick of slack covers the float rounding of the damage sum.
+     */
+    private double tickShortfall() {
+        int predictedTicks = (int) Math.ceil(1 / maximumBlockDamage);
+        int shortfall = (predictedTicks - 1) - ticksSinceStart;
+        return shortfall <= 1 ? 0 : shortfall * 50;
+    }
+
+    private double wallClockShortfall() {
+        double predictedTime = Math.ceil(1 / maximumBlockDamage) * 50;
+        double realTime = System.currentTimeMillis() - startBreak;
+        return predictedTime - realTime;
     }
 
     private void clampBalance() {
