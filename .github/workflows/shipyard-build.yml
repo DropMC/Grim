@@ -1,0 +1,71 @@
+# Builds this fork's jar and sends it to Shipyard (template: DropMC/shipyard ci/workflows/gradle-plugin.yml).
+# Servers deploy from 2.0; the jar goes as grimac.jar.
+# skipFabric leaves the Fabric subprojects out: configuring them pulls Loom and remaps several
+# Minecraft versions, minutes spent on jars never shipped.
+name: shipyard-build
+run-name: "${{ inputs.shipyard_build && format('shipyard #{0}', inputs.shipyard_build) || github.event.head_commit.message }}"
+
+on:
+  push:
+    branches: ['2.0']
+  workflow_dispatch:
+    inputs:
+      shipyard_build:
+        description: Set by Shipyard; leave empty when running by hand
+        type: string
+        default: ''
+
+jobs:
+  build:
+    # Off until the repository variable SHIPYARD_ENABLED is true (set with the SHIPYARD_URL and
+    # SHIPYARD_TOKEN secrets, once Shipyard is reachable), so a push does not fail on a missing URL.
+    if: vars.SHIPYARD_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: |
+            21
+            25
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Build
+        run: ./gradlew :bukkit:shadowJar --no-daemon -PskipFabric=true
+
+      - name: Collect the jars
+        id: jars
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          list=""
+          mkdir -p shipyard-jars
+          while read -r entry; do
+            [ -n "$entry" ] || continue
+            unit=""
+            [[ $entry == *=* ]] && { unit=${entry%%=*}; entry=${entry#*=}; }
+            matches=($entry)
+            [ ${#matches[@]} -eq 1 ] || { echo "::error::$entry matched ${#matches[@]} files"; exit 1; }
+            jar=${matches[0]}
+            [ -n "$unit" ] && { cp "$jar" "shipyard-jars/$unit.jar"; jar="shipyard-jars/$unit.jar"; }
+            list+="$jar"$'\n'
+          done <<'JARS'
+          grimac=bukkit/build/libs/grimac-bukkit-*.jar
+          JARS
+          {
+            echo 'list<<EOF'; printf '%s' "$list"; echo 'EOF'
+            # Commons version the jars compiled against, when the repo pins one in its catalog.
+            echo "commons=$(sed -n 's/^commons = "\(.*\)"$/\1/p' gradle/libs.versions.toml 2>/dev/null)"
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: DropMC/shipyard/ci/ingest@main
+        with:
+          url: ${{ secrets.SHIPYARD_URL }}
+          token: ${{ secrets.SHIPYARD_TOKEN }}
+          build: ${{ inputs.shipyard_build }}
+          commons: ${{ steps.jars.outputs.commons }}
+          jars: ${{ steps.jars.outputs.list }}
