@@ -1,0 +1,39 @@
+# Copy of DropMC/shipyard ci/ingest. This repository is public and cannot use an action from
+# the private shipyard repository, so it carries its own; keep it in step with that one.
+name: Shipyard ingest
+description: Sends this run's jars to Shipyard as one build.
+
+inputs:
+  url:
+    description: Shipyard base URL (secrets.SHIPYARD_URL)
+    required: true
+  token:
+    description: The source's ingest token (secrets.SHIPYARD_TOKEN)
+    required: true
+  jars:
+    description: Newline-separated jar paths; every one must exist
+    required: true
+  build:
+    description: inputs.shipyard_build when the panel dispatched this run
+    default: ''
+  commons:
+    description: Commons version the jars were compiled against
+    default: ''
+
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      env:
+        SHIPYARD_URL: ${{ inputs.url }}
+        SHIPYARD_TOKEN: ${{ inputs.token }}
+        SHIPYARD_BUILD: ${{ inputs.build }}
+        COMMONS: ${{ inputs.commons }}
+        COMMIT: ${{ github.sha }}
+        REF: ${{ github.ref_name }}
+        RUN_ID: ${{ github.run_id }}
+        RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        JARS: ${{ inputs.jars }}
+      run: |
+        mapfile -t jars < <(printf '%s\n' "$JARS" | sed '/^[[:space:]]*$/d')
+        "${{ github.action_path }}/ingest.sh" "${jars[@]}"

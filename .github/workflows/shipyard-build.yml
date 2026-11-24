@@ -62,7 +62,7 @@ jobs:
             echo "commons=$(sed -n 's/^commons = "\(.*\)"$/\1/p' gradle/libs.versions.toml 2>/dev/null)"
           } >> "$GITHUB_OUTPUT"
 
-      - uses: DropMC/shipyard/ci/ingest@main
+      - uses: ./.github/actions/shipyard-ingest
         with:
           url: ${{ secrets.SHIPYARD_URL }}
           token: ${{ secrets.SHIPYARD_TOKEN }}
